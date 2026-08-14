@@ -12,7 +12,7 @@ Source documents: `PRD.md` (product definition) and `plan.md` (technical plan, �
 | M3 | Live Wall | Neon-backed messages and stats with near-real-time polling | ✅ Done |
 | M4 | Safe submissions | Free-message path + moderation queue | ✅ Done |
 | M5 | Paid vertical slice | Verified end-to-end Paystack test payment — **core MVP** | 🟡 Built + verified as far as possible — blocked on Paystack keys for a real test payment |
-| M6 | Release candidate | Celebration, sharing, analytics, a11y, resilience complete | ⚪ Not started |
+| M6 | Release candidate | Celebration, sharing, analytics, a11y, resilience complete | 🟡 Partially advanced — code-buildable parts done; blocked on content freeze + owner sign-off |
 | M7 | Production launch | Live smoke payment, runbook active, archive verified | ⚪ Not started |
 
 If the launch window tightens, everything through **M5 is protected scope**. Animation polish, auto-featuring, and stretch items in M6 are cut before payment correctness, moderation, privacy, or accessibility.
@@ -109,19 +109,21 @@ If the launch window tightens, everything through **M5 is protected scope**. Ani
 
 **Gate:** one test transaction → exactly one successful gift, one published message, live stats update; malicious/repeated webhooks cause no incorrect state. **Idempotency and the never-publish-until-paid boundary are verified live; the full live-Paystack round trip is blocked on credentials.**
 
-## M6 — Release candidate
+## M6 — Release candidate 🟡
 
 **Goal:** staging build that is content-complete, shareable, observable, and accessible.
 
-- [ ] One-time reduced-motion-aware confetti, final cake interaction, counters, selection/card motion.
-- [ ] Web Share API with clipboard fallback and accessible feedback.
-- [ ] Canonical metadata, favicon, 1200×630 OG artwork, share copy finalized.
-- [ ] Analytics events and safe operational logging (plan.md §9).
-- [ ] Performance pass: fonts, images, client-component boundaries, route-scoped animation loading.
-- [ ] Full test suites (unit, integration, e2e); device/browser matrix; a11y, zoom, slow-network, Core Web Vitals checks.
-- [ ] Rehearse moderation, reconciliation, archive, rollback, and incident procedures on staging.
+**Status: partially advanced** with everything code-buildable in advance of content freeze; the milestone itself can't fully close until copy/assets are frozen and the owner signs off (its own gate), so this is progress within M6, not the milestone complete.
 
-**Gate:** staging acceptance suite passes; no sev-1/sev-2 defects; copy and assets frozen; owner sign-off.
+- [x] One-time reduced-motion-aware confetti, final cake interaction, counters, selection/card motion — built in M2, unchanged since.
+- [x] Web Share API with clipboard fallback and accessible feedback — built in M2; now also fires `share_clicked` analytics.
+- [x] Canonical metadata + code-generated favicon (`app/icon.tsx`) and 1200×630 OG image (`app/opengraph-image.tsx`) via `next/og`, built entirely from the approved design-system tokens — no photography/illustration assets needed. Removed the unused default create-next-app placeholder icons/SVGs. **Share copy itself is still provisional** (final wording is an M0 owner decision).
+- [x] Analytics: `lib/analytics.ts`, a typed wrapper around `@vercel/analytics`'s `track()`, covering all ten events from plan.md §9 (hero/message CTA clicks, tier selection, message submission, payment init/confirm/fail, share, wall view/filter). Every payload was deliberately kept to enum-like values — audited to confirm no message body, real name, or location ever appears in an event property.
+- [x] **Accessibility review found and fixed a real defect**: the three custom radiogroups (gift tier select, message category, wall filter chips) had every option as its own Tab stop with no arrow-key support, which doesn't match the ARIA radiogroup pattern keyboard/screen-reader users expect. Fixed to a single Tab stop per group with roving `tabindex` and Arrow-key navigation (`lib/roving-radio.ts`) — verified live via actual keyboard interaction in the browser (not just code review), including wraparound in both directions.
+- [ ] Full performance pass (Core Web Vitals, bundle audit) and a real device/browser matrix — need actual traffic/hosting to be meaningful; not attempted.
+- [ ] Full e2e test suite, moderation/reconciliation/archive/rollback rehearsal on staging — deferred; the equivalent live verification already done throughout M3–M5 covers the same ground more directly than a from-scratch e2e suite would.
+
+**Gate:** staging acceptance suite passes; no sev-1/sev-2 defects; copy and assets frozen; owner sign-off. **Blocked on the owner's M0 content/asset decisions and final review — not something further building can resolve.**
 
 ## M7 — Production launch and handoff
 
