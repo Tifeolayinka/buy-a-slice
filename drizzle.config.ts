@@ -7,6 +7,11 @@ export default defineConfig({
   dbCredentials: {
     // drizzle-kit does not auto-load .env.local — run via:
     // npx dotenv -e .env.local -- npx drizzle-kit push
-    url: process.env.DATABASE_URL!,
+    //
+    // Schema changes use the direct/unpooled connection, not DATABASE_URL
+    // (pooled): PgBouncer's transaction-mode pooling doesn't support the
+    // session-level operations DDL can need. lib/db/index.ts uses the
+    // pooled DATABASE_URL for normal app queries, which is correct there.
+    url: process.env.DATABASE_URL_UNPOOLED!,
   },
 });

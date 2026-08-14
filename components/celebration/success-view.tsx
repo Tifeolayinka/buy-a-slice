@@ -9,6 +9,7 @@ import { Confetti } from "@/components/celebration/confetti";
 import { Button } from "@/components/ui/button";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Spinner } from "@/components/ui/spinner";
+import { initialsFrom } from "@/lib/initials";
 
 export type SuccessState = "confirming" | "success" | "failed" | "pending";
 
@@ -21,15 +22,6 @@ type SuccessViewProps = {
 };
 
 const SHARE_TEXT = "I just bought Tife a slice of birthday cake 🎂 Join in:";
-
-function initialsFrom(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  return parts
-    .slice(0, 2)
-    .map((part) => part[0]!.toUpperCase())
-    .join("");
-}
 
 export function SuccessView({
   initialState,

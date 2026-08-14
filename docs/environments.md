@@ -11,9 +11,13 @@ live Paystack credentials.
 | Env source | `.env.local` (via `vercel env pull`) | Vercel dashboard | Vercel dashboard |
 
 The database is **Neon Postgres**, provisioned through the Vercel Marketplace
-integration (`vercel integration add neon`), which injects `DATABASE_URL` into
-the linked Vercel project. Access goes through Drizzle ORM
-(`lib/db/index.ts` — always use `getDb()`, never a module-scope client).
+integration (`vercel integration add neon`), which injects `DATABASE_URL`
+(pooled, via PgBouncer) and `DATABASE_URL_UNPOOLED` (direct) into the linked
+Vercel project. Application queries go through Drizzle ORM (`lib/db/index.ts`
+— always use `getDb()`, never a module-scope client) against the **pooled**
+URL. Schema pushes (`drizzle.config.ts`) use the **unpooled** URL — pooled
+connections run in PgBouncer transaction mode, which doesn't support the
+session-level operations DDL can need.
 
 Neon supports database branching: use a branch per environment so preview
 deploys and experiments never touch production data.
@@ -22,7 +26,8 @@ deploys and experiments never touch production data.
 
 | Variable | Location | Notes |
 | --- | --- | --- |
-| `DATABASE_URL` | Vercel env (all) → `.env.local` via `vercel env pull` | Injected by the Neon integration |
+| `DATABASE_URL` | Vercel env (all) → `.env.local` via `vercel env pull` | Pooled; used by the app at runtime |
+| `DATABASE_URL_UNPOOLED` | Vercel env (all) → `.env.local` via `vercel env pull` | Direct; used only for schema pushes |
 | `NEXT_PUBLIC_SITE_URL` | Vercel env | Canonical URL, used for metadata/OG |
 | `PAYSTACK_PUBLIC_KEY` | Vercel env | Public checkout key (test vs live per env) |
 | `PAYSTACK_SECRET_KEY` | Vercel env (server-only) | Used by server routes to initialize/verify transactions. Never in the client bundle |

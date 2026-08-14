@@ -61,6 +61,8 @@ export function GiftFlow({ mode }: GiftFlowProps) {
   const [message, setMessage] = useState("");
   const [anonymous, setAnonymous] = useState(false);
   const [category, setCategory] = useState<CategoryId>("wish");
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const selectedTier = GIFT_TIERS.find((tier) => tier.id === tierId) ?? null;
 
@@ -97,13 +99,48 @@ export function GiftFlow({ mode }: GiftFlowProps) {
     else router.push("/");
   }
 
-  function submitMessageStep() {
+  async function submitMessageStep() {
     if (!messageValid) return;
     if (isGiftMode) {
       setStep("review");
-    } else {
-      // M4 wires this to the real pending-moderation submission.
-      router.push("/success?state=pending");
+      return;
+    }
+
+    setSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      const res = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name,
+          isAnonymous: anonymous,
+          country,
+          body: message,
+          category,
+        }),
+      });
+
+      if (res.ok) {
+        router.push("/success?state=pending");
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      setSubmitError(
+        data?.error === "rate_limited"
+          ? "You've sent a few messages already — try again in a bit."
+          : data?.error === "profanity"
+            ? "That message contains language we can't publish. Please rephrase it."
+            : data?.error === "link"
+              ? "Links aren't allowed in messages. Please remove them."
+              : "Something went wrong sending your message. Please try again.",
+      );
+    } catch {
+      setSubmitError("Something went wrong sending your message. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   }
 
@@ -317,10 +354,22 @@ export function GiftFlow({ mode }: GiftFlowProps) {
               </Field>
             </FieldGroup>
 
-            <Button size="lg" disabled={!messageValid} onClick={submitMessageStep}>
-              {isGiftMode ? "Continue" : "Send some love"}{" "}
-              <span aria-hidden="true">{isGiftMode ? "" : "❤️"}</span>
-              {isGiftMode ? <ArrowRight data-icon="inline-end" aria-hidden="true" /> : null}
+            {submitError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {submitError}
+              </p>
+            ) : null}
+
+            <Button size="lg" disabled={!messageValid || submitting} onClick={submitMessageStep}>
+              {submitting ? (
+                <Spinner />
+              ) : (
+                <>
+                  {isGiftMode ? "Continue" : "Send some love"}{" "}
+                  <span aria-hidden="true">{isGiftMode ? "" : "❤️"}</span>
+                  {isGiftMode ? <ArrowRight data-icon="inline-end" aria-hidden="true" /> : null}
+                </>
+              )}
             </Button>
           </motion.section>
         ) : null}
