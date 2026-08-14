@@ -16,16 +16,26 @@ export type SuccessState = "confirming" | "success" | "failed" | "pending";
 type SuccessViewProps = {
   initialState: SuccessState;
   simulated: boolean;
+  reference?: string;
   submittedName?: string;
   submittedLocation?: string;
   submittedMessage?: string;
 };
 
+type ConfirmedMessage = {
+  name: string;
+  location: string | null;
+  body: string;
+};
+
 const SHARE_TEXT = "I just bought Tife a slice of birthday cake 🎂 Join in:";
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLL_ATTEMPTS = 40; // ~80s
 
 export function SuccessView({
   initialState,
   simulated,
+  reference,
   submittedName,
   submittedLocation,
   submittedMessage,
@@ -33,19 +43,79 @@ export function SuccessView({
   const reducedMotion = useReducedMotion();
   const [state, setState] = useState<SuccessState>(initialState);
   const [shared, setShared] = useState(false);
+  const [confirmedMessage, setConfirmedMessage] = useState<ConfirmedMessage | null>(null);
+  const [timedOut, setTimedOut] = useState(false);
 
-  const displayName = submittedName?.trim() || "Tosin";
+  const displayName = confirmedMessage?.name ?? submittedName?.trim() ?? "Tosin";
+  const displayLocation = confirmedMessage?.location ?? submittedLocation;
   const displayMessage =
-    submittedMessage?.trim() ||
+    confirmedMessage?.body ??
+    submittedMessage?.trim() ??
     "Happy birthday Tife! Cheers to more wins, growth, peace and all the things your heart desires. ✨";
 
-  // M5 replaces this with polling the server for the verified payment status.
+  // Design/QA-only path: simulate the confirming → success transition
+  // without a real payment reference.
   useEffect(() => {
     if (state === "confirming" && simulated) {
       const timer = setTimeout(() => setState("success"), 1600);
       return () => clearTimeout(timer);
     }
   }, [state, simulated]);
+
+  // Real path: poll the server for the Paystack-verified payment status.
+  // The callback redirect is a UX signal only — the page stays in
+  // "confirming" until the webhook (or this poll observing its result)
+  // reports success.
+  useEffect(() => {
+    if (state !== "confirming" || !reference || simulated) return;
+
+    let cancelled = false;
+    let attempts = 0;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      if (cancelled) return;
+      attempts += 1;
+
+      try {
+        const res = await fetch(`/api/gifts/status?reference=${encodeURIComponent(reference!)}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.status === "success") {
+            if (data.message) {
+              setConfirmedMessage({
+                name: data.message.displayName,
+                location: data.message.location,
+                body: data.message.body,
+              });
+            }
+            setState("success");
+            return;
+          }
+          if (data.status === "failed" || data.status === "abandoned") {
+            setState("failed");
+            return;
+          }
+        }
+      } catch {
+        // Transient network error — keep polling.
+      }
+
+      if (cancelled) return;
+      if (attempts >= MAX_POLL_ATTEMPTS) {
+        setTimedOut(true);
+        setState("failed");
+        return;
+      }
+      timer = setTimeout(poll, POLL_INTERVAL_MS);
+    }
+
+    poll();
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [state, reference, simulated]);
 
   async function share() {
     const url = process.env.NEXT_PUBLIC_SITE_URL ?? window.location.origin;
@@ -86,10 +156,12 @@ export function SuccessView({
           😔
         </span>
         <h1 className="font-heading text-3xl font-semibold tracking-[-0.035em]">
-          The payment didn&rsquo;t go through
+          {timedOut ? "This is taking longer than expected" : "The payment didn’t go through"}
         </h1>
         <p className="text-muted-foreground">
-          You weren&rsquo;t charged. Give it another try?
+          {timedOut
+            ? "Check the Birthday Wall in a few minutes — your slice may still be on its way."
+            : "You weren’t charged. Give it another try?"}
         </p>
         <div className="flex flex-col gap-3">
           <ButtonLink size="lg" href="/gift">
@@ -149,7 +221,7 @@ export function SuccessView({
         <MessageCard
           initials={initialsFrom(displayName)}
           name={displayName}
-          location={submittedLocation}
+          location={displayLocation ?? undefined}
           message={displayMessage}
           time="just now"
         />

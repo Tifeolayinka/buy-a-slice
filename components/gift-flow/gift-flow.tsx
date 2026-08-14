@@ -63,6 +63,7 @@ export function GiftFlow({ mode }: GiftFlowProps) {
   const [category, setCategory] = useState<CategoryId>("wish");
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
 
   const selectedTier = GIFT_TIERS.find((tier) => tier.id === tierId) ?? null;
 
@@ -144,19 +145,50 @@ export function GiftFlow({ mode }: GiftFlowProps) {
     }
   }
 
-  function submitPayment() {
+  async function submitPayment() {
+    if (!selectedTier || amountKobo === null) return;
+
     setStep("processing");
-    // M5 replaces this with a real server-side Paystack initialization; the
-    // submitted content is passed through the URL only for this simulation
-    // so the celebration screen reflects what was actually written.
-    const params = new URLSearchParams({
-      state: "confirming",
-      simulated: "1",
-      name: anonymous ? "Anonymous" : name,
-      message,
-    });
-    if (country) params.set("location", country);
-    setTimeout(() => router.push(`/success?${params.toString()}`), 1400);
+    setPaymentError(null);
+
+    try {
+      const res = await fetch("/api/gifts/initialize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tierId: selectedTier.id,
+          customAmountNaira: selectedTier.id === "custom" ? Number(customNaira) : undefined,
+          name,
+          isAnonymous: anonymous,
+          country,
+          body: message,
+          category,
+        }),
+      });
+
+      if (res.ok) {
+        const { authorizationUrl } = await res.json();
+        window.location.href = authorizationUrl;
+        return;
+      }
+
+      const data = await res.json().catch(() => null);
+      setPaymentError(
+        data?.error === "rate_limited"
+          ? "You've sent a few gifts already — try again in a bit."
+          : data?.error === "invalid_custom_amount"
+            ? "That amount isn't valid — please adjust it and try again."
+            : data?.error === "profanity"
+              ? "That message contains language we can't publish. Please rephrase it."
+              : data?.error === "link"
+                ? "Links aren't allowed in messages. Please remove them."
+                : "Couldn't start checkout. Please try again.",
+      );
+      setStep("review");
+    } catch {
+      setPaymentError("Couldn't start checkout. Please try again.");
+      setStep("review");
+    }
   }
 
   const transition = reducedMotion
@@ -395,13 +427,19 @@ export function GiftFlow({ mode }: GiftFlowProps) {
               </CardContent>
             </Card>
 
+            {paymentError ? (
+              <p className="text-sm text-destructive" role="alert">
+                {paymentError}
+              </p>
+            ) : null}
+
             <div className="flex flex-col gap-3">
               <Button size="lg" onClick={submitPayment}>
                 Buy Tife a Slice — {formatKoboAsNaira(amountKobo)}
               </Button>
               <p className="text-center text-xs text-muted-foreground">
-                <span aria-hidden="true">🔒 </span>Payment is secure and encrypted. Paystack
-                checkout arrives in M5 — this build simulates it.
+                <span aria-hidden="true">🔒 </span>Payment is secure and encrypted, powered by
+                Paystack.
               </p>
             </div>
           </motion.section>

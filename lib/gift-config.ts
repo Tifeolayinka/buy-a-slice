@@ -1,5 +1,7 @@
-// Fixture-side gift configuration for M2. In M5 the authoritative amounts move
-// server-side (Convex event config); the client keeps this only for display.
+// Client-side gift configuration for display and optimistic UI. The
+// authoritative amounts live in the `events` table and are re-resolved
+// server-side in lib/gift-validation.ts — the client's numbers are never
+// trusted for payment (plan.md §7).
 
 export const MESSAGE_MAX_LENGTH = 280;
 

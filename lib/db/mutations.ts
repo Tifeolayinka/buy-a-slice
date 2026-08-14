@@ -81,6 +81,106 @@ export async function submitFreeMessage(
   return { ok: true, messageId };
 }
 
+export type CreatePendingGiftInput = {
+  name: string;
+  isAnonymous: boolean;
+  country?: string;
+  body: string;
+  category: string;
+  tier: "slice" | "big_slice" | "energy" | "custom";
+  amountKobo: number;
+  reference: string;
+};
+
+export type CreatePendingGiftResult =
+  | { ok: true; messageId: string; giftId: string }
+  | { ok: false; reason: "profanity" | "link" };
+
+// Visitor, message (pending — never public until payment succeeds), and
+// gift (initiated) created atomically via a chained CTE, for the same
+// neon-http transaction-support reason as submitFreeMessage above.
+export async function createPendingGift(
+  eventId: string,
+  input: CreatePendingGiftInput,
+): Promise<CreatePendingGiftResult> {
+  const contentIssue = checkMessageContent(input.body);
+  if (contentIssue) {
+    return { ok: false, reason: contentIssue };
+  }
+
+  const displayName = input.isAnonymous ? "Anonymous" : input.name;
+  const normalizedCountry = normalizeCountry(input.country);
+
+  const result = await getDb().execute<{ message_id: string; gift_id: string }>(sql`
+    with new_visitor as (
+      insert into visitors (event_id, display_name, normalized_country, is_anonymous)
+      values (${eventId}, ${displayName}, ${normalizedCountry}, ${input.isAnonymous})
+      returning id
+    ),
+    new_message as (
+      insert into messages (event_id, visitor_id, body, category, is_anonymous, status)
+      select ${eventId}, new_visitor.id, ${input.body}, ${input.category}, ${input.isAnonymous}, 'pending'
+      from new_visitor
+      returning id, visitor_id
+    ),
+    new_gift as (
+      insert into gifts (
+        event_id, visitor_id, message_id, amount_kobo, currency, tier,
+        paystack_reference, status
+      )
+      select
+        ${eventId}, new_message.visitor_id, new_message.id, ${input.amountKobo}, 'NGN',
+        ${input.tier}, ${input.reference}, 'initiated'
+      from new_message
+      returning id, message_id
+    )
+    select message_id, id as gift_id from new_gift
+  `);
+
+  const row = result.rows[0];
+  if (!row?.message_id || !row?.gift_id) {
+    throw new Error("createPendingGift: insert returned no id");
+  }
+
+  return { ok: true, messageId: row.message_id, giftId: row.gift_id };
+}
+
+export type ConfirmGiftPaymentResult =
+  | { newlyConfirmed: true; messageId: string }
+  | { newlyConfirmed: false };
+
+// Idempotent: repeated or duplicate webhook deliveries for an already-
+// confirmed gift are no-ops. Both updates happen in one atomic statement
+// (a data-modifying CTE) rather than two sequential calls — with the
+// neon-http driver's lack of transaction support, two separate calls would
+// leave a window where a crash between them marks the gift paid without
+// approving its message, and a webhook retry would then skip both (the
+// first update's guard would already be satisfied). A single statement
+// closes that gap.
+export async function confirmGiftPayment(
+  reference: string,
+  transactionId: string,
+): Promise<ConfirmGiftPaymentResult> {
+  const result = await getDb().execute<{ id: string }>(sql`
+    with updated_gift as (
+      update gifts
+      set status = 'success', paid_at = now(), paystack_transaction_id = ${transactionId},
+        last_verified_at = now()
+      where paystack_reference = ${reference} and status <> 'success'
+      returning id, message_id
+    )
+    update messages
+    set status = 'approved', moderated_at = now()
+    from updated_gift
+    where messages.id = updated_gift.message_id
+    returning messages.id
+  `);
+
+  const messageId = result.rows[0]?.id;
+  if (!messageId) return { newlyConfirmed: false };
+  return { newlyConfirmed: true, messageId };
+}
+
 export type ModerationAction = "approve" | "reject" | "feature" | "unfeature";
 
 export async function applyModerationAction(

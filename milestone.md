@@ -11,7 +11,7 @@ Source documents: `PRD.md` (product definition) and `plan.md` (technical plan, �
 | M2 | Clickable experience | Full visitor journey on fixture data | 🟡 Built — awaiting owner visual review |
 | M3 | Live Wall | Neon-backed messages and stats with near-real-time polling | ✅ Done |
 | M4 | Safe submissions | Free-message path + moderation queue | ✅ Done |
-| M5 | Paid vertical slice | Verified end-to-end Paystack test payment — **core MVP** | ⚪ Not started |
+| M5 | Paid vertical slice | Verified end-to-end Paystack test payment — **core MVP** | 🟡 Built + verified as far as possible — blocked on Paystack keys for a real test payment |
 | M6 | Release candidate | Celebration, sharing, analytics, a11y, resilience complete | ⚪ Not started |
 | M7 | Production launch | Live smoke payment, runbook active, archive verified | ⚪ Not started |
 
@@ -91,19 +91,23 @@ If the launch window tightens, everything through **M5 is protected scope**. Ani
 
 **Gate:** submit → moderate → publish works live; unapproved messages never appear; unauthorized moderation calls fail. **Verified live end-to-end**, including through the real browser UI (submitted an anonymous message via `/gift?mode=message` → confirmed absent from `/wall` and `/api/wall/stats` → approved via the `/moderate` UI → confirmed it appeared on `/wall` with correct stats).
 
-## M5 — Verified paid vertical slice ⭐ core MVP
+## M5 — Verified paid vertical slice ⭐ core MVP 🟡
 
 **Goal:** one production-shaped Paystack test payment completes the whole journey.
 
-- [ ] Authoritative server-side tier/amount resolution, integer kobo, unique server-generated references.
-- [ ] Pending visitor/message/gift persisted; Paystack initialized from a server-side route handler.
-- [ ] Checkout handles cancel, init error, retry, back, refresh.
-- [ ] Webhook HTTP action: raw-body HMAC verification + independent `transaction/verify` check (reference, amount, currency, recipient).
-- [ ] One idempotent confirmation mutation marks the gift paid and publishes the unflagged message.
-- [ ] `/success` states: confirming, confirmed, failed, timed-out; callback treated as UX signal only.
-- [ ] Adversarial tests: duplicate/delayed webhooks, forged signatures, altered amounts, callback-before-webhook.
+**Status: fully built and verified as far as possible without real Paystack credentials.** Every piece that doesn't require an actual Paystack account has been implemented and directly tested against the live database. The one remaining step — a real test-mode payment through Paystack's hosted checkout — needs `PAYSTACK_SECRET_KEY`/`PAYSTACK_PUBLIC_KEY` (owner action, M0).
 
-**Gate:** one test transaction → exactly one successful gift, one published message, live stats update; malicious/repeated webhooks cause no incorrect state.
+- [x] Authoritative server-side tier/amount resolution (`lib/gift-validation.ts::resolveTierAmountKobo`) — reads fixed tier prices and custom min/max from the `events` row, never the client. Integer kobo throughout. Server-generated unique references (`bts_<uuid>`, `lib/reference.ts`).
+- [x] Pending visitor/message/gift persisted atomically (`createPendingGift`, a three-way chained CTE — see the `neon-http` transaction note below) from `POST /api/gifts/initialize`, which then calls Paystack's `/transaction/initialize` and returns the checkout URL. The gift-flow's payment step now redirects the browser there for real instead of the M2 placeholder.
+- [x] Checkout failure handling: invalid tier/amount → 422 with inline error and the user kept on the review step (not stuck on a spinner); Paystack call failure → 502, same graceful recovery. A gift that's initiated but never paid leaves its message permanently `pending` — **verified live**: it never appears on the public Wall or counts toward stats, with no cleanup job required.
+- [x] Webhook (`POST /api/paystack/webhook`, `lib/webhook-signature.ts`, `lib/paystack.ts`): raw-body HMAC-SHA512 signature check (constant-time compare) → independent `transaction/verify` call → compares reference **and amount** (not just currency/status — an earlier draft missed the amount check, caught and fixed before shipping) against the gift row actually stored, never the webhook payload's own numbers.
+- [x] One idempotent confirmation mutation (`confirmGiftPayment`) — a single atomic data-modifying CTE (chosen specifically so a duplicate webhook after a crash mid-confirmation can't apply the message-approval half twice, which two separate sequential statements would allow) marks the gift `success` and the message `approved` together, guarded by `WHERE status <> 'success'`. **Verified live** via `scripts/verify-gift-flow.ts`: first call confirms and updates stats by exactly +1 gift/+1 message; an identical second call (simulating a retried/duplicate webhook) is a correct no-op.
+- [x] `/success` states: confirming (polls `/api/gifts/status` every 2s, up to ~80s), success (shows the real confirmed message, not simulated data), failed, and a distinct timed-out message after the poll window — callback URL is a UX signal only, the page never trusts it directly.
+- [ ] Adversarial tests against a *real* Paystack sandbox (forged signatures, altered amounts, callback-before-webhook) — the signature-verification and idempotent-confirmation *logic* is proven correct (unit tests + the live idempotency script above), but an actual forged-webhook-against-a-real-transaction test needs live credentials.
+- **Open item surfaced while building, not yet an owner decision:** the gift flow collects no email address (matches the approved mockup and the "under 60 seconds" goal), so Paystack's required receipt-destination field is filled with a synthetic, reference-scoped address (`{reference}@buyers.buy-a-slice.app`) rather than asking the buyer for one. Worth an explicit call on whether buyers should get a real payment receipt email.
+- **`neon-http` has no `db.transaction()` support** (confirmed against the driver's actual source — it throws `"No transactions support in neon-http driver"` — not assumed from memory). Every place this milestone needed atomicity uses either a single data-modifying CTE (`createPendingGift`, `confirmGiftPayment`) or `db.batch()` for independent statements, both of which are genuinely atomic over Neon's HTTP transport.
+
+**Gate:** one test transaction → exactly one successful gift, one published message, live stats update; malicious/repeated webhooks cause no incorrect state. **Idempotency and the never-publish-until-paid boundary are verified live; the full live-Paystack round trip is blocked on credentials.**
 
 ## M6 — Release candidate
 

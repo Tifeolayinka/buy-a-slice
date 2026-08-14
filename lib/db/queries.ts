@@ -195,6 +195,27 @@ export async function getPaymentStatusByReference(
   };
 }
 
+export type GiftForVerification = {
+  amountKobo: number;
+  status: string;
+};
+
+// Used only by the webhook handler to compare Paystack's verified amount
+// against what was actually charged before accepting a payment as
+// confirmed (plan.md §7 — reference, amount, currency, and recipient must
+// all match).
+export async function getGiftForVerification(
+  reference: string,
+): Promise<GiftForVerification | null> {
+  const [row] = await getDb()
+    .select({ amountKobo: gifts.amountKobo, status: gifts.status })
+    .from(gifts)
+    .where(eq(gifts.paystackReference, reference))
+    .limit(1);
+
+  return row ?? null;
+}
+
 // Privileged read: real names even for anonymous submissions, per the
 // PRD's abuse-handling requirement. Only reachable through the
 // MODERATION_SECRET-gated /moderate routes — never exposed publicly.
