@@ -1,69 +1,100 @@
-import Image from "next/image";
+import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 
-export default function Home() {
+import { BrandMark, MessageCard, StatCard } from "@/components/birthday/system";
+import { Cake } from "@/components/birthday/cake";
+import { SiteNav } from "@/components/birthday/site-nav";
+import { StatCounter } from "@/components/birthday/stat-counter";
+import { ButtonLink } from "@/components/ui/button-link";
+
+// Fixture data until the live stats/messages queries land in M3.
+const stats = [
+  { emoji: "🍰", value: 31, label: "Slices bought" },
+  { emoji: "💌", value: 47, label: "Messages" },
+  { emoji: "🌍", value: 6, label: "Countries" },
+];
+
+const recentMessages = [
+  {
+    initials: "KM",
+    name: "Kemi",
+    location: "Lagos, NG",
+    message:
+      "Happy birthday Tife! May this new year be your best one yet. Big things loading for you! 🚀",
+    time: "2h ago",
+  },
+  {
+    initials: "DA",
+    name: "Dami",
+    location: "London, UK",
+    message: "Keep being amazing. The world is better with you in it. Happy birthday bro! 🥳",
+    time: "4h ago",
+  },
+];
+
+export default function HomePage() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert h-5 w-[100px]"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the{" "}
-            <code className="rounded bg-black/[.06] px-1.5 py-0.5 font-mono text-[0.9em] dark:bg-white/[.08]">
-              page.tsx
-            </code>{" "}
-            file.
+    <>
+      <main className="mx-auto flex w-full max-w-xl flex-col gap-8 px-5 pt-8 pb-28">
+        <header className="flex items-center justify-between">
+          <BrandMark compact />
+        </header>
+
+        <section className="flex flex-col items-center gap-4 text-center">
+          <h1 className="text-balance font-heading text-5xl leading-[0.95] font-semibold tracking-[-0.04em]">
+            It&rsquo;s Tife&rsquo;s Birthday{" "}
+            <span aria-hidden="true">🎉</span>
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="text-lg text-muted-foreground">
+            I survived another year. That deserves cake.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert h-[14px] w-4"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={14}
-            />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
+          <Cake />
+          <div className="flex w-full flex-col gap-3">
+            <ButtonLink size="lg" href="/gift">
+              Buy me a slice
+              <ArrowRight data-icon="inline-end" aria-hidden="true" />
+            </ButtonLink>
+            <ButtonLink size="lg" variant="outline" href="/gift?mode=message">
+              Leave a birthday message
+            </ButtonLink>
+          </div>
+        </section>
+
+        <section aria-label="Live stats" className="flex flex-col gap-3">
+          <p className="text-center text-sm font-semibold">
+            <span aria-hidden="true">❤️ </span>42 people showed Tife love today
+            <span aria-hidden="true"> ❤️</span>
+          </p>
+          <div className="grid grid-cols-3 gap-3">
+            {stats.map((stat) => (
+              <StatCard
+                key={stat.label}
+                emoji={stat.emoji}
+                label={stat.label}
+                value={<StatCounter value={stat.value} />}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section aria-label="Recent love" className="flex flex-col gap-3">
+          <div className="flex items-baseline justify-between">
+            <h2 className="text-sm font-semibold">Recent love</h2>
+            <Link
+              href="/wall"
+              className="text-sm font-semibold text-muted-foreground underline-offset-4 hover:underline"
+            >
+              See the Birthday Wall →
+            </Link>
+          </div>
+          <div className="flex flex-col gap-3">
+            {recentMessages.map((entry) => (
+              <MessageCard key={entry.initials} {...entry} />
+            ))}
+          </div>
+        </section>
       </main>
-    </div>
+      <SiteNav />
+    </>
   );
 }
