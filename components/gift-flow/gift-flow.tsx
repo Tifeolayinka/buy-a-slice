@@ -16,6 +16,8 @@ import {
   type GiftTier,
 } from "@/lib/gift-config";
 import { formatKoboAsNaira, nairaToKobo } from "@/lib/money";
+import { trackEvent } from "@/lib/analytics";
+import { handleRadioGroupKeyDown } from "@/lib/roving-radio";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -124,6 +126,7 @@ export function GiftFlow({ mode }: GiftFlowProps) {
       });
 
       if (res.ok) {
+        trackEvent({ name: "message_submitted", kind: "free" });
         router.push("/success?state=pending");
         return;
       }
@@ -168,6 +171,8 @@ export function GiftFlow({ mode }: GiftFlowProps) {
 
       if (res.ok) {
         const { authorizationUrl } = await res.json();
+        trackEvent({ name: "payment_initialized", tier: selectedTier.id });
+        trackEvent({ name: "message_submitted", kind: "paid" });
         window.location.href = authorizationUrl;
         return;
       }
@@ -220,7 +225,23 @@ export function GiftFlow({ mode }: GiftFlowProps) {
               </p>
             </header>
 
-            <div role="radiogroup" aria-label="Gift options" className="flex flex-col gap-3">
+            <div
+              role="radiogroup"
+              aria-label="Gift options"
+              className="flex flex-col gap-3"
+              onKeyDown={(event) =>
+                handleRadioGroupKeyDown(
+                  event,
+                  GIFT_TIERS.findIndex((tier) => tier.id === tierId),
+                  GIFT_TIERS.length,
+                  (index) => {
+                    const tier = GIFT_TIERS[index]!;
+                    setTierId(tier.id);
+                    trackEvent({ name: "gift_tier_selected", tier: tier.id });
+                  },
+                )
+              }
+            >
               {GIFT_TIERS.map((tier) => {
                 const selected = tierId === tier.id;
                 return (
@@ -229,7 +250,11 @@ export function GiftFlow({ mode }: GiftFlowProps) {
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    onClick={() => setTierId(tier.id)}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => {
+                      setTierId(tier.id);
+                      trackEvent({ name: "gift_tier_selected", tier: tier.id });
+                    }}
                     className="rounded-3xl text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/35"
                   >
                     <Card
@@ -358,13 +383,26 @@ export function GiftFlow({ mode }: GiftFlowProps) {
 
               <Field>
                 <FieldLabel>Category</FieldLabel>
-                <div role="radiogroup" aria-label="Message category" className="flex flex-wrap gap-2">
+                <div
+                  role="radiogroup"
+                  aria-label="Message category"
+                  className="flex flex-wrap gap-2"
+                  onKeyDown={(event) =>
+                    handleRadioGroupKeyDown(
+                      event,
+                      CATEGORIES.findIndex((entry) => entry.id === category),
+                      CATEGORIES.length,
+                      (index) => setCategory(CATEGORIES[index]!.id),
+                    )
+                  }
+                >
                   {CATEGORIES.map((entry) => (
                     <button
                       key={entry.id}
                       type="button"
                       role="radio"
                       aria-checked={category === entry.id}
+                      tabIndex={category === entry.id ? 0 : -1}
                       onClick={() => setCategory(entry.id)}
                       className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/35"
                     >

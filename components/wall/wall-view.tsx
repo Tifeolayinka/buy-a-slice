@@ -1,14 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 
 import { MessageCard } from "@/components/birthday/system";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { trackEvent } from "@/lib/analytics";
 import { useWallPage } from "@/lib/hooks/use-wall-data";
 import { initialsFrom } from "@/lib/initials";
 import { relativeTime } from "@/lib/relative-time";
+import { handleRadioGroupKeyDown } from "@/lib/roving-radio";
 import { type CategoryId } from "@/lib/gift-config";
 
 const FILTERS: { id: "all" | CategoryId; label: string }[] = [
@@ -24,12 +26,28 @@ export function WallView() {
   const [filter, setFilter] = useState<"all" | CategoryId>("all");
   const { data, error, isLoading } = useWallPage(filter);
 
+  useEffect(() => {
+    trackEvent({ name: "wall_viewed" });
+  }, []);
+
   return (
     <div className="flex flex-col gap-6">
       <div
         role="radiogroup"
         aria-label="Filter messages by category"
         className="flex flex-wrap justify-center gap-2"
+        onKeyDown={(event) =>
+          handleRadioGroupKeyDown(
+            event,
+            FILTERS.findIndex((entry) => entry.id === filter),
+            FILTERS.length,
+            (index) => {
+              const entry = FILTERS[index]!;
+              setFilter(entry.id);
+              trackEvent({ name: "wall_filter_changed", category: entry.id });
+            },
+          )
+        }
       >
         {FILTERS.map((entry) => (
           <button
@@ -37,7 +55,11 @@ export function WallView() {
             type="button"
             role="radio"
             aria-checked={filter === entry.id}
-            onClick={() => setFilter(entry.id)}
+            tabIndex={filter === entry.id ? 0 : -1}
+            onClick={() => {
+              setFilter(entry.id);
+              trackEvent({ name: "wall_filter_changed", category: entry.id });
+            }}
             className="rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/35"
           >
             <Badge variant={filter === entry.id ? "default" : "outline"} className="px-4 py-2">

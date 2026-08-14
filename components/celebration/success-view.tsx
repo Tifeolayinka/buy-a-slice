@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { ButtonLink } from "@/components/ui/button-link";
 import { Spinner } from "@/components/ui/spinner";
 import { initialsFrom } from "@/lib/initials";
+import { trackEvent } from "@/lib/analytics";
 
 export type SuccessState = "confirming" | "success" | "failed" | "pending";
 
@@ -89,10 +90,12 @@ export function SuccessView({
                 body: data.message.body,
               });
             }
+            trackEvent({ name: "payment_confirmed" });
             setState("success");
             return;
           }
           if (data.status === "failed" || data.status === "abandoned") {
+            trackEvent({ name: "payment_failed" });
             setState("failed");
             return;
           }
@@ -103,6 +106,7 @@ export function SuccessView({
 
       if (cancelled) return;
       if (attempts >= MAX_POLL_ATTEMPTS) {
+        trackEvent({ name: "payment_failed" });
         setTimedOut(true);
         setState("failed");
         return;
@@ -122,8 +126,10 @@ export function SuccessView({
     try {
       if (navigator.share) {
         await navigator.share({ title: "Buy Tife a Slice", text: SHARE_TEXT, url });
+        trackEvent({ name: "share_clicked", method: "web_share" });
       } else {
         await navigator.clipboard.writeText(`${SHARE_TEXT} ${url}`);
+        trackEvent({ name: "share_clicked", method: "clipboard" });
         setShared(true);
         setTimeout(() => setShared(false), 2500);
       }

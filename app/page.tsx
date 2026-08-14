@@ -1,12 +1,11 @@
 import Link from "next/link";
-import { ArrowRight } from "lucide-react";
 
 import { BrandMark } from "@/components/birthday/system";
 import { Cake } from "@/components/birthday/cake";
+import { HomeCtas } from "@/components/birthday/home-ctas";
 import { LiveStats } from "@/components/birthday/live-stats";
 import { RecentLove } from "@/components/birthday/recent-love";
 import { SiteNav } from "@/components/birthday/site-nav";
-import { ButtonLink } from "@/components/ui/button-link";
 
 export default function HomePage() {
   return (
@@ -25,15 +24,7 @@ export default function HomePage() {
             I survived another year. That deserves cake.
           </p>
           <Cake />
-          <div className="flex w-full flex-col gap-3">
-            <ButtonLink size="lg" href="/gift">
-              Buy me a slice
-              <ArrowRight data-icon="inline-end" aria-hidden="true" />
-            </ButtonLink>
-            <ButtonLink size="lg" variant="outline" href="/gift?mode=message">
-              Leave a birthday message
-            </ButtonLink>
-          </div>
+          <HomeCtas />
         </section>
 
         <section aria-label="Live stats">
